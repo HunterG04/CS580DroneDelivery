@@ -2,12 +2,11 @@
 <package>
   <name>intro_to_robotics</name>
   <version>0.0.0</version>
-  <description>The intro_to_robotics package</description>
+  <description>Example code for Dr. Matt Taylor's "Intro to Robotics" course</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag --> 
   <!-- Example:  -->
-  <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
-  <maintainer email="james@todo.todo">james</maintainer>
+  <maintainer email="james.irwin@wsu.edu">James Irwin</maintainer>
 
 
   <!-- One license tag required, multiple allowed, one license per tag -->
