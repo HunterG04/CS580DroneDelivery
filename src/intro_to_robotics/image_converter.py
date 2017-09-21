@@ -3,7 +3,7 @@
 import roslib
 import rospy
 import sys
-import cv2.cv as cv
+import cv2 as cv
 from cv_bridge import CvBridge, CvBridgeError
 
 bridge = CvBridge()
