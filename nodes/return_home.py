@@ -30,12 +30,12 @@ count = 1
 #returns the location and "size" of the detected object
 def process_image(image):
 	#convert color space from BGR to HSV
-	hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-        response = urllib2.urlopen("http://andrewlewis.pythonanywhere.com/color/").read()
+	response = urllib2.urlopen("http://andrewlewis.pythonanywhere.com/color/").read()
 
-        j = json.loads(response)
-        
+	j = json.loads(response)
+
 	#create bounds for our color filter
 	lower_bound = np.array([j["r"] - 10, j["g"] - 10, j["b"] - 10])#np.array([0, 10, 10])
 	upper_bound = np.array([j["r"] + 10, j["g"] + 10, j["b"] + 10])
@@ -59,11 +59,11 @@ def process_image(image):
 		if area > 500 and area > max_area:
 			max_contour = contour
 			max_area = area
-			
+
 	if max_contour is not None:
 		#calculate the centroid of the results of the color filer
 		M = cv2.moments(max_contour)
-		
+
 		if M['m00'] > 0:
 			cx = int(M['m10']/M['m00'])
 			cy = int(M['m01']/M['m00'])
@@ -76,13 +76,13 @@ def process_image(image):
 			img = cv2.rectangle(image,(x,y),(x+w,y+h),(0,255,0),2)
 			width = w
 
-		
+
 		F = 300 * 0.24 / 0.2 # F = (P * D) /W
 		if width == 0:
 			distance = 0
 		else:
 			distance = 0.2 * F / width # D' = W * F / P
-			
+
 
 		message1 = "Distance: " + "%8.2f"%distance
 		cv2.putText(image,message1, (0,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255))
@@ -155,7 +155,7 @@ class Node:
 		#None/0 is returned if no object is seen
 		location, magnitude, width = process_image(cv_image)
 		#print location, magnitude, width
-		
+
 		global init, turn, r, l, last_direction, count,x,y
 
 		self.position = (x,y)
@@ -163,7 +163,7 @@ class Node:
 		if init:
 			self.init_position = copy.deepcopy(self.position)
 			init = False
-		
+
 		if width == 0.0:
 			print "searching for objects", width
 			time = 2
@@ -197,14 +197,14 @@ class Node:
 		if turn:
 			if last_direction != 2:
 				count += 1
-				#print count
+			#print count
 			time = 1
 			u1 = math.pi * l/(time * r)
 			u2 = - math.pi * l/(time * r)
 			turn = False
 			self.spinWheels(u1, u2)
 			last_direction = 2
-			return 
+			return
 
 
 		if (location[0] < - 50 and location[0] > -250) or (location[0] > 50 and location[0] < 250):
@@ -232,7 +232,7 @@ class Node:
 				last_direction = 1
 
 		self.spinWheels(u1, u2)
-	
+
 	def shutdown(self):
 		# stop turtlebot
 		rospy.loginfo("Stop TurtleBot")
