@@ -32,10 +32,6 @@ def process_image(image):
 	#convert color space from BGR to HSV
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-	response = urllib2.urlopen("http://andrewlewis.pythonanywhere.com/color/").read()
-
-	j = json.loads(response)
-
 	#create bounds for our color filter
 	lower_bound = np.array([j["r"] - 10, j["g"] - 10, j["b"] - 10])#np.array([0, 10, 10])
 	upper_bound = np.array([j["r"] + 10, j["g"] + 10, j["b"] + 10])
