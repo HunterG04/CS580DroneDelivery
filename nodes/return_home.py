@@ -7,6 +7,8 @@ import cv2
 import numpy as np
 from intro_to_robotics.image_converter import ToOpenCV, depthToOpenCV
 from nav_msgs.msg import Odometry
+import tf
+from geometry_msgs.msg import Transform
 import copy
 import math
 import sys
@@ -19,9 +21,10 @@ l = 0.1
 
 x = 0.0
 y = 0.0
+yaw = 0.0
 
 init = True
-turn = False
+return_flag = False
 last_direction = 0
 count = 1
 
@@ -30,13 +33,19 @@ count = 1
 #returns the location and "size" of the detected object
 def process_image(image):
 	#convert color space from BGR to HSV
-    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+	hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
+	#response = urllib2.urlopen("http://andrewlewis.pythonanywhere.com/color/").read()
+    #j = json.loads(response)
+        
 	#create bounds for our color filter
-	lower_bound = np.array([j["r"] - 10, j["g"] - 10, j["b"] - 10])#np.array([0, 10, 10])
-	upper_bound = np.array([j["r"] + 10, j["g"] + 10, j["b"] + 10])
+	#lower_bound = np.array([j["r"] - 10, j["g"] - 10, j["b"] - 10])#np.array([0, 10, 10])
+	#upper_bound = np.array([j["r"] + 10, j["g"] + 10, j["b"] + 10])
 
-	print lower_bound, upper_bound
+	lower_bound = np.array([0,100,100])#np.array([0, 10, 10])
+	upper_bound = np.array([20,255,255])
+
+	#print j, lower_bound, upper_bound
 
 	#execute the color filter, returns a binary black/white image
 	mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
@@ -55,11 +64,11 @@ def process_image(image):
 		if area > 500 and area > max_area:
 			max_contour = contour
 			max_area = area
-
+			
 	if max_contour is not None:
 		#calculate the centroid of the results of the color filer
 		M = cv2.moments(max_contour)
-
+		
 		if M['m00'] > 0:
 			cx = int(M['m10']/M['m00'])
 			cy = int(M['m01']/M['m00'])
@@ -72,13 +81,13 @@ def process_image(image):
 			img = cv2.rectangle(image,(x,y),(x+w,y+h),(0,255,0),2)
 			width = w
 
-
-		F = 300 * 0.24 / 0.2 # F = (P * D) /W
+		
+		F = 260 * 0.24 / 0.15 # F = (P * D) /W
 		if width == 0:
 			distance = 0
 		else:
-			distance = 0.2 * F / width # D' = W * F / P
-
+			distance = 0.15 * F / width # D' = W * F / P
+			
 
 		message1 = "Distance: " + "%8.2f"%distance
 		cv2.putText(image,message1, (0,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255))
@@ -112,20 +121,27 @@ class Node:
 
 		rospy.Subscriber('/odom',Odometry,self.get_position)
 
-		global x, y
+		#self.tf_listener = tf.TransformListener()
+
+		global x, y, ori_vector
 
 		self.position = (x,y)
 		self.init_position = None
 
 		rospy.on_shutdown(self.shutdown)
 
-
 	def get_position(self, odometry):
-		global x, y
+		global x, y, yaw
 		x = odometry.pose.pose.position.x
 		y = odometry.pose.pose.position.y
 
+		(roll, pitch, yaw) = tf.transformations.euler_from_quaternion([odometry.pose.pose.orientation.x, odometry.pose.pose.orientation.y, odometry.pose.pose.orientation.z, odometry.pose.pose.orientation.w])
+
+		#print roll, pitch, yaw
+
+
 	def spinWheels(self, u1, u2):
+		global r, l
 		linear_vel = r/2 * (u1 + u2)
 		ang_vel = r/(2*l) * (u1 - u2)
 
@@ -133,9 +149,16 @@ class Node:
 		twist_msg.linear.x = linear_vel
 		twist_msg.angular.z = ang_vel
 
-		#print linear_vel, ang_vel
+		print linear_vel, ang_vel
 
 		self.movement_pub.publish(twist_msg)
+		#rospy.sleep(0.2)
+
+	def angle_between(self, v1, v2):
+		v1_u = v1 / np.linalg.norm(v1)
+		v2_u = v2 / np.linalg.norm(v2)
+
+		return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
 
 
 	#this function wll get called every time a new image comes in
@@ -151,76 +174,99 @@ class Node:
 		#None/0 is returned if no object is seen
 		location, magnitude, width = process_image(cv_image)
 		#print location, magnitude, width
-
-		global init, turn, r, l, last_direction, count,x,y
+		
+		global init, return_flag, r, l, last_direction, count,x,y, yaw
 
 		self.position = (x,y)
 
 		if init:
 			self.init_position = copy.deepcopy(self.position)
 			init = False
-
-		if width == 0.0:
+		
+		if width == 0.0 and not return_flag:
 			print "searching for objects", width
-			time = 2
+			time = 4
 			u1 = math.pi * l/(2 * time * r)
 			u2 = - math.pi * l/(2 * time * r)
 			turn = False
 			self.spinWheels(u1, u2)
 			last_direction = 2
+			return
 
-		F = 300 * 0.24 / 0.20 # F = (P * D) /W
+		F = 260 * 0.24 / 0.15 # F = (P * D) /W
 		if width == 0:
 			distance = 0
 		else:
-			distance = 0.2 * F / width # D' = W * F / P
+			distance = 0.15 * F / width # D' = W * F / P
 
 		#log the processing results
 		rospy.logdebug("image location: {}\tmagnitude: {}".format(location, magnitude))
 
 		# decide kinematics 
 		correction = False
-		v = 0.2 #m/s
+		v = 0.4 #m/s
 
-		if distance > 0.5:
-			#print "go forward"
+		if distance > 0.4:
+			print "go forward"
 			u1 = v/r  #phi_r
 			u2 = u1 #phi_l
 			last_direction = 0
+			#return
 		else:
-			turn = True
+			return_flag = True
+			print "reach target, return"
+			print self.init_position
+			print self.position
+			self.movement_pub.publish(Twist())
+			
+		
+		if return_flag:
+			print "back to init position"
+			vec = [ self.init_position[0] - self.position[0] , self.init_position[1] - self.position[1] ]
+			curr_ori = [math.cos(yaw), math.sin(yaw)]
+			print "return vec", vec
+			print "curr vec", 
 
-		if turn:
-			if last_direction != 2:
-				count += 1
-			#print count
-			time = 1
-			u1 = math.pi * l/(time * r)
-			u2 = - math.pi * l/(time * r)
-			turn = False
-			self.spinWheels(u1, u2)
-			last_direction = 2
-			return
+			angle = self.angle_between(vec, curr_ori)
+			print angle
 
+			if angle > 0.05:
+				time = 1
+				u1 = -angle * l/(time * r)
+				u2 = angle * l/(time * r)
+			else:
+				u1 = 0.4/r  #phi_r
+				u2 = u1 #phi_l
 
-		if (location[0] < - 50 and location[0] > -250) or (location[0] > 50 and location[0] < 250):
-			correction = True
+			
+			dis = math.sqrt((self.position[0]-self.init_position[0])**2 + (self.position[1]-self.init_position[1])**2)
 
-		if correction and not turn:
-			#print "adjust the angular"
-			#print location, magnitude, width, distance
+			if dis < 0.05:
+				return_flag = False
+				self.shutdown()
 
-			drift = location[0] - 0.0 #init_location[0]
+		
+		if location:
+			if (location[0] < - 50 and location[0] > -250) or (location[0] > 50 and location[0] < 250):
+				correction = True
+			else:
+				correction = False
+
+		if correction and not return_flag:
+			print "adjust the angular"
+			print location, magnitude, width, distance
+
+			drift = copy.deepcopy(location[0]) - 0.0 #init_location[0]
 
 			drift_d = drift * 0.15/width
-			theta = math.atan(drift_d/distance)
+			theta = math.atan2(drift, F)
 
-			#print drift_d, theta
+			print drift_d, theta
 
-			time = 1
+			time = 4
 
-			u1 = -theta * l/(time * r)
-			u2 = theta * l/(time * r)
+			u1 += -theta * l/(time * r)
+			u2 += theta * l/(time * r)
 
 			if theta > 0:
 				last_direction = 2
@@ -228,10 +274,11 @@ class Node:
 				last_direction = 1
 
 		self.spinWheels(u1, u2)
-
+	
 	def shutdown(self):
 		# stop turtlebot
 		rospy.loginfo("Stop TurtleBot")
+		self.movement_pub.publish(Twist())
 		# sleep just makes sure TurtleBot receives the stop command prior to shutting down the script
 		rospy.sleep(1)
 
@@ -244,4 +291,3 @@ if __name__ == "__main__":
 	#rospy.spin()
 
 	rospy.spin()
-
